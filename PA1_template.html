@@ -1,0 +1,175 @@
+---
+title: "PA1_template.Rmd"
+author: "Nikolas Rohrmann"
+date: "2/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading and processing data
+
+In order to create my plots I decided to use the lattice and ggplot2 package occasionally. That's why I need to install them, as you can see below. 
+
+After that I need to load the data out of the Downloads folder and save it to the variable "data".
+
+Later I will transform the "date" variable into the Date class, but until then it will not be necessary and that's why I won't include this here. 
+
+
+
+```{r, cache = TRUE}
+library(ggplot2)
+library(lattice)
+
+data <- read.csv("/Users/okc_rapid/Downloads/activity.csv")
+
+```
+
+## What is the mean total number of steps taken per day?
+
+In order to calculate the total number of steps, I applied the function aggregate to the variables steps and date.
+That way the sum of the steps is calculated for every date. The results of the function call were saved to the variable numSteps (number  of  Steps). 
+
+Now we can plot the results as a histogram via the base plotting system. I changed the color to blue, edited the title and the xlab and set breaks to 10, in order to get a better impression of the distribution of the steps.
+
+
+```{r, echo=TRUE, cache = TRUE}
+numSteps <- aggregate(steps~date, FUN = sum, data = data)
+
+hist(numSteps$steps, col = "blue",
+     xlab = "Number of Steps", main = "Frequency of certain numbers of steps"
+     ,breaks = 10)
+```
+
+## Calculate and report the mean and median of the total number of steps taken per day
+
+We already have the number of steps for every day, so we just need to apply the mean and the median function to it. 
+
+Note that the na.rm argument is set to TRUE, in order to prevent errors.
+
+```{r, cache = TRUE}
+meanNumSteps <- mean(numSteps$steps, na.rm = TRUE)
+medianNumSteps <- median(numSteps$steps, na.rm = TRUE)
+```
+
+The mean is `r meanNumSteps` and the median is `r medianNumSteps`, so they are quite similar.
+
+## What is the average daily activity pattern?
+
+The id of the interval is saved in the "interval" variable of the data. So this time we need to calculate the mean number of steps in every interval. Therefore, we again make use of the aggregate function. The resulst were saved in the variable stepsInterval
+
+I plotted the results using the base plotting system. We need to plot the interval on the x-axis and the mean number of steps on the y-axis. As the instructor requested I included the argument type = "l". Furthermore, I edited the color and the labels.
+
+```{r, cache = TRUE}
+stepsInterval <- aggregate(steps~interval, FUN = mean, data = data)
+plot(stepsInterval$interval, stepsInterval$steps, type =  "l",
+     col = "blue", xlab = "Interval", ylab = "Average of Steps",
+     main = "Average Steps per Interval")
+```
+
+### Interval with the maximum number of steps
+
+It is easier to find out the corresponding interval to the maximum number of steps after using tapply, which only gives back a one-dimensional vector. After determining the maximum, we can just use the names function to get the corresponding index, which is the name of the interval (835 in this case).
+
+```{r, cache = TRUE}
+max <- with(data, tapply(steps, interval, mean, na.rm = TRUE))
+max <- which.max(max)
+names(max)
+```
+
+## Imputing missing values
+
+Calculating the number of NAs can be done with sum and is.na, because is.na returns 0 and 1. 1 is for a missing value. With the help of sum we can add up all the 1s and get the number of missing values.
+
+```{r, cache = TRUE}
+sum(is.na(data$steps))
+```
+
+### Replace the missing data
+
+I decided to fill the NAs with the average number of steps taken for their respective intervals. For replacing the missing values we need to loop through every observation with for. Then it will be determined whether it is missing using an if-loop. 
+
+If this is the case, the interval is determined and the mean for that interval is assigned to the value. If this is not the case, it will stay the same. 
+
+Finally, I created the vector fillIn, in which the results are saved.
+
+
+```{r, cache = TRUE}
+fillIn <- numeric()
+for(x in 1:17568){
+  if(is.na(data[x,1])){
+    inter <- data[x,3]
+    data[x, 1] <- stepsInterval[stepsInterval$interval == inter, 2]
+  }
+  else{
+    data[x, 1] <- data[x,1]
+  }
+  fillIn <- c(fillIn, data[x,1])
+}
+```
+
+### Create a new dataset without NAs
+
+I assigned the old data to "data2". The only thing that needs to change is the variables steps. The values we want to save in this place are included in fillIn. So we just need to assign fillIn to the variable steps.
+
+```{r, cache = TRUE}
+data2 <- data
+data2$steps <- fillIn
+```
+
+### Histogram of total number of steps per day
+
+The code below looks familiar, doesn't it? It is basically the same as the one we needed to calculate the number of steps per day with the missing values. The plots is also pretty similar, so there is close to no effect.
+
+```{r, cache = TRUE}
+numSteps2 <- aggregate(steps~date, FUN = sum, data = data2)
+hist(numSteps2$steps, col = "blue",
+     xlab = "Number of Steps", main = "Frequency of certain numbers of steps"
+     ,breaks = 10)
+```
+
+## Are there differences in activity patterns weekdays and weekends?
+
+First, I created two strings called weekday and weekend. They contain the names of the days for the weekdays and weekend. The language of my PC is set to German, that is why needed to use the German names. I apologize for the confusion. 
+
+After that I created the factor variable dayType in which the results of the for-loop are saved. The foor-loop iterates through all dates.
+
+If the day is in the weekday vector, another "weekday" will be added to the dayType variable. Otherwise, another "weekend" will be added to it.
+
+Finally, the factor vector is added "weekdays" data frame.
+
+```{r, cache = TRUE}
+data2$date <- as.Date(data$date, "%Y-%m-%d")
+
+weekday <- c("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag")
+weekend <- c("Samstag, Sonntag")
+
+dayType <- factor()
+for(x in 1:17568){
+  if(weekdays(data2[x,2]) %in% weekday){
+    x <- "weekday"
+  }
+  else{
+    x <- "weekend"
+  }
+  
+  dayType <- c(dayType, x)
+}
+
+weekdays <- data2
+weekdays$dayType <- dayType
+```
+
+### Plot the difference between weekdays and weekends
+
+After that we only have to plot the weekdays data frame by the dayType variables, which I did using the ggplot2 package. To indicate the structure of the two plots, I used the layout argument. Additionally, I set the type argument to "l" as instructed.
+
+```{r}
+weekdays <- aggregate(steps~interval+dayType, FUN = mean, data = weekdays)
+
+xyplot(steps~interval | dayType,
+       weekdays,layout = c(1,2),
+       xlab = "Interval", ylab = "Number of Steps", type ="l")
+````
