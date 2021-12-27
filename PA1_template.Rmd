@@ -1,7 +1,7 @@
 ---
 title: "PA1_template.Rmd"
 author: "Nikolas Rohrmann"
-date: "2/22/2021"
+date: "12/27/2021"
 output: html_document
 ---
 
@@ -9,167 +9,124 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Loading and processing data
+## Loading and Preprocessing the data
 
-In order to create my plots I decided to use the lattice and ggplot2 package occasionally. That's why I need to install them, as you can see below. 
+Here I am using read.csv to load the data in to R. The function complete.cases() removes all rows that include missing values. Also, I am loading a few packages that I am going to need later. 
 
-After that I need to load the data out of the Downloads folder and save it to the variable "data".
-
-Later I will transform the "date" variable into the Date class, but until then it will not be necessary and that's why I won't include this here. 
-
-
-
-```{r, cache = TRUE}
+```{r, cache = TRUE, echo = TRUE}
+library(dplyr)
+library(plotly)
 library(ggplot2)
-library(lattice)
 
-data <- read.csv("/Users/okc_rapid/Downloads/activity.csv")
+data <- read.csv(file="/Users/okc_rapid/Desktop/R/course-project-getting-and-cleaning-data/activity.csv")
+data <- data[complete.cases(data),]
 
 ```
 
 ## What is the mean total number of steps taken per day?
 
-In order to calculate the total number of steps, I applied the function aggregate to the variables steps and date.
-That way the sum of the steps is calculated for every date. The results of the function call were saved to the variable numSteps (number  of  Steps). 
+Harnessing aggregate() I can calculate the total amount of steps taken per day and put that into a histogram. 
+Setting breaks for to ten allows for a more clear image of the distribution. As you can see, the person that collected the most frequently makes between about 8,000 to 16,000 steps. On average she completes 10766,19 steps per day. The median is not that different with about 10765 steps. 
 
-Now we can plot the results as a histogram via the base plotting system. I changed the color to blue, edited the title and the xlab and set breaks to 10, in order to get a better impression of the distribution of the steps.
+```{r, cache = TRUE, echo = TRUE}
 
+stepsDay <- aggregate(data[,1], by = list(data[,2]), FUN = sum)
 
-```{r, echo=TRUE, cache = TRUE}
-numSteps <- aggregate(steps~date, FUN = sum, data = data)
+hist(stepsDay$x, xlab = "Steps per day", main = "Histogram of steps per day", border = "black", col = "magenta", breaks = 10)
 
-hist(numSteps$steps, col = "blue",
-     xlab = "Number of Steps", main = "Frequency of certain numbers of steps"
-     ,breaks = 10)
+mean(stepsDay$x)
+median(stepsDay$x)
 ```
-
-## Calculate and report the mean and median of the total number of steps taken per day
-
-We already have the number of steps for every day, so we just need to apply the mean and the median function to it. 
-
-Note that the na.rm argument is set to TRUE, in order to prevent errors.
-
-```{r, cache = TRUE}
-meanNumSteps <- mean(numSteps$steps, na.rm = TRUE)
-medianNumSteps <- median(numSteps$steps, na.rm = TRUE)
-```
-
-The mean is `r meanNumSteps` and the median is `r medianNumSteps`, so they are quite similar.
 
 ## What is the average daily activity pattern?
 
-The id of the interval is saved in the "interval" variable of the data. So this time we need to calculate the mean number of steps in every interval. Therefore, we again make use of the aggregate function. The resulst were saved in the variable stepsInterval
+This time we were supposed to create a time series plot that shows the average amount of steps taken per interval. You can see my version of the blot below. Again, I used the aggregate function to calculate the average number of steps per interval. The last command in this code chunk is desigend to get the interval with the maximum amount of steps. It is the interval from 835 to 839.
 
-I plotted the results using the base plotting system. We need to plot the interval on the x-axis and the mean number of steps on the y-axis. As the instructor requested I included the argument type = "l". Furthermore, I edited the color and the labels.
+```{r, cache = TRUE, echo = TRUE}
 
-```{r, cache = TRUE}
-stepsInterval <- aggregate(steps~interval, FUN = mean, data = data)
-plot(stepsInterval$interval, stepsInterval$steps, type =  "l",
-     col = "blue", xlab = "Interval", ylab = "Average of Steps",
-     main = "Average Steps per Interval")
+stepsInterval <- aggregate(data[,1], by = list(data[,3]), FUN = mean)
+
+p <- stepsInterval %>% ggplot(aes(x= Group.1, y= x)) + geom_area(fill="#69b3a2", alpha=0.5) + geom_line(color="#69b3a2") +ylab("Average amount of steps") + xlab("Interval")
+
+p
+
+stepsInterval[which.max(stepsInterval$x),]
+
 ```
 
-### Interval with the maximum number of steps
+## Imputing Missing Values
 
-It is easier to find out the corresponding interval to the maximum number of steps after using tapply, which only gives back a one-dimensional vector. After determining the maximum, we can just use the names function to get the corresponding index, which is the name of the interval (835 in this case).
+Here I am first reading in the data for a second time, because I removed the missing values entirely from my original dataset. 
 
-```{r, cache = TRUE}
-max <- with(data, tapply(steps, interval, mean, na.rm = TRUE))
-max <- which.max(max)
-names(max)
-```
+As required, I calculate the number of rows that contain a missing value of steps in the second row: 2304.
 
-## Imputing missing values
+Row 3 is supposed to remind us, how I calculated the means per interval, which I am going to use to impute the missing values. The for and embedded if loop replace each missing value with the mean for that specific interval. We were supposed to put that into a new dataset, which is not really necessary, but I complied by saving the dataset as data3. 
 
-Calculating the number of NAs can be done with sum and is.na, because is.na returns 0 and 1. 1 is for a missing value. With the help of sum we can add up all the 1s and get the number of missing values.
+stepsDay2 is the total of steps per day, but with the imputed values. The two histograms don't look to different and so do the mean and median. The difference between the original and the new mean is 0. Only the median has changed slightly. 
 
-```{r, cache = TRUE}
-sum(is.na(data$steps))
-```
+```{r, cache = TRUE, echo = TRUE}
 
-### Replace the missing data
+data2 <- read.csv(file = "/Users/okc_rapid/Desktop/R/course-project-getting-and-cleaning-data/activity.csv")
 
-I decided to fill the NAs with the average number of steps taken for their respective intervals. For replacing the missing values we need to loop through every observation with for. Then it will be determined whether it is missing using an if-loop. 
+sum(is.na(data2$steps))
 
-If this is the case, the interval is determined and the mean for that interval is assigned to the value. If this is not the case, it will stay the same. 
+stepsInterval <- aggregate(data[,1], by = list(data[,3]), FUN = mean)
 
-Finally, I created the vector fillIn, in which the results are saved.
-
-
-```{r, cache = TRUE}
-fillIn <- numeric()
-for(x in 1:17568){
-  if(is.na(data[x,1])){
-    inter <- data[x,3]
-    data[x, 1] <- stepsInterval[stepsInterval$interval == inter, 2]
-  }
-  else{
-    data[x, 1] <- data[x,1]
-  }
-  fillIn <- c(fillIn, data[x,1])
-}
-```
-
-### Create a new dataset without NAs
-
-I assigned the old data to "data2". The only thing that needs to change is the variables steps. The values we want to save in this place are included in fillIn. So we just need to assign fillIn to the variable steps.
-
-```{r, cache = TRUE}
-data2 <- data
-data2$steps <- fillIn
-```
-
-### Histogram of total number of steps per day
-
-The code below looks familiar, doesn't it? It is basically the same as the one we needed to calculate the number of steps per day with the missing values. The plots is also pretty similar, so there is close to no effect.
-
-```{r, cache = TRUE}
-numSteps2 <- aggregate(steps~date, FUN = sum, data = data2)
-hist(numSteps2$steps, col = "blue",
-     xlab = "Number of Steps", main = "Frequency of certain numbers of steps"
-     ,breaks = 10)
-```
-
-## Are there differences in activity patterns weekdays and weekends?
-
-First, I created two strings called weekday and weekend. They contain the names of the days for the weekdays and weekend. The language of my PC is set to German, that is why needed to use the German names. I apologize for the confusion. 
-
-After that I created the factor variable dayType in which the results of the for-loop are saved. The foor-loop iterates through all dates.
-
-If the day is in the weekday vector, another "weekday" will be added to the dayType variable. Otherwise, another "weekend" will be added to it.
-
-Finally, the factor vector is added "weekdays" data frame.
-
-```{r, cache = TRUE}
-data2$date <- as.Date(data$date, "%Y-%m-%d")
-
-weekday <- c("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag")
-weekend <- c("Samstag, Sonntag")
-
-dayType <- factor()
-for(x in 1:17568){
-  if(weekdays(data2[x,2]) %in% weekday){
-    x <- "weekday"
-  }
-  else{
-    x <- "weekend"
-  }
+for (i in 1:length(data2$steps)){
   
-  dayType <- c(dayType, x)
+  if(is.na(data2[i,1]) == TRUE){
+    
+    y <- data2[i,3] 
+    data2[i,1] <- stepsInterval[stepsInterval$Group.1 == y, 2]
+  }
+  i <- i + 1
 }
 
-weekdays <- data2
-weekdays$dayType <- dayType
+data3 <- data2
+
+stepsDay2 <- aggregate(data3[,1], by = list(data3[,2]), FUN = sum)
+
+par(mfrow = c(2,1))
+hist(stepsDay2$x, xlab = "Steps per day", main = "NAs Imputed", border = "black", col = "lightblue", breaks = 10)
+hist(stepsDay$x, xlab = "Steps per day", main = "NAs Removed", border = "black", col = "magenta", breaks = 10)
+
+
+mean(stepsDay$x) - mean(stepsDay2$x)
+median(stepsDay$x) - median(stepsDay2 $x)
+
 ```
 
-### Plot the difference between weekdays and weekends
+## Are there differences in activity patterns between weekdays and weekends?
 
-After that we only have to plot the weekdays data frame by the dayType variables, which I did using the ggplot2 package. To indicate the structure of the two plots, I used the layout argument. Additionally, I set the type argument to "l" as instructed.
+Using the dplyr package's mutate function I can add a column that contains the specific weekday as a factor. However, I needed to rename the levels, because the weekdays function yields the actual weekday (Monday, Tuesday etc.). After that, I used the aggregate function again, but this time with two factors inweek and interval. 
 
-```{r}
-weekdays <- aggregate(steps~interval+dayType, FUN = mean, data = weekdays)
+Then, I used the split function to create two independent data frames. The rest is just for creating the respective time series plots. The plots reveal major differences in activity. On weekdays, the person only is particularly active in the morning (before 1000). Whereas on weekends, she has an extended period of activity from about 750 t0 2050. Also, it seems like in total she is moving a lot more on weekends than on weekdays. 
 
-xyplot(steps~interval | dayType,
-       weekdays,layout = c(1,2),
-       xlab = "Interval", ylab = "Number of Steps", type ="l")
-````
+```{r, cache = TRUE, echo = TRUE}
+
+data$date <- as.Date(data$date)
+dataWeek <- mutate(data, inweek = factor(weekdays(data$date)))
+levels(dataWeek$inweek) <- c("weekday", "weekday", "weekday", "weekday", "weekday", "weekend", "weekend")
+
+stepsIntervalWeek <- aggregate(dataWeek[,1], by = list(dataWeek$interval, dataWeek$inweek), FUN = mean)
+
+d <- split(stepsIntervalWeek, stepsIntervalWeek$Group.2)
+
+weekday <- d[1]
+weekend <- d[2]
+
+weekday <- as.data.frame(weekday)
+weekend <- as.data.frame(weekend)
+
+par(mfrow = c(2,1))
+
+g <- weekday %>% ggplot(aes(x= weekday.Group.1, y= weekday.x)) + geom_area(fill="#69b3a2", alpha=0.5) + geom_line(color="#69b3a2") +ylab("Average amount of steps") + xlab("Interval") + ggtitle("Weekday")
+
+g
+
+h <- weekend %>% ggplot(aes(x= weekend.Group.1, y= weekend.x)) + geom_area(fill="#ff66ff", alpha=0.5) + geom_line(color="#ff66ff") +ylab("Average amount of steps") + xlab("Interval") + ggtitle("Weekend")
+
+h
+
+```
+
